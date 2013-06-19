@@ -7,7 +7,7 @@
             [ring.middleware.session :refer [wrap-session]]
             [clojure.pprint]))
 
-(def state (atom :voting #_:not-started))
+(def state (atom :not-started))
 (def team-counter (atom 1))
 (def teams (atom {999 "Team 9's idea"}))
 (def votes (atom {998 1, 999 3}))
@@ -52,7 +52,7 @@
   "Vote for a gamification idea"
   (page
    "Vote"
-   [:h1 "The best gamification idea is:"]          ; TODO
+   [:h1 "The best gamification idea is:"]
    [:form {:action "/vote", :method "post"}
     (map
      (fn [[id idea]] [:p
@@ -73,6 +73,14 @@
        (fn [[id votes]] [:li votes " votes for team " id " with " (get @teams id)]) ; TODO show picture, format the list nicely
        results)])))
 
+(defn- command-js [command] ; TODO include in a script element as a js fun, call it
+  "Create JavaScript to perform a GM command in the background"
+  (str "var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/command/" command "', true);
+      xhr.onload = function(e) {console.log('done with " command "');}
+      xhr.send();
+"))
+
 (defn page-gamemaster []
   "Control page for the GameMaster: 1. task info, 2. show task to others, 3. start brainstorming?, 4. start voting, 5. show number voted, 6. show voting results"
   (page
@@ -80,12 +88,16 @@
    [:h1 "You control the game!"]
    [:p "Your mission, should you decide to accept it: TODO:describe"] ; TODO Hide when read?
    [:h2 "Controls"]
-   (let [bs {:style "display:block;width:100%;margin-bottom:10px"}]
+   (letfn [(button [cmd label]
+             [:button
+              {:style "display:block;width:100%;margin-bottom:10px",
+               :onclick (command-js cmd)}
+              label])]
     [:div
-     [:button bs "1. Show the task on the projector"]
-     [:button bs "2. Start brainstorming"]
-     [:button bs "3. Start voting"]
-     [:button bs "4. Show voting results"]])))
+     (button "show-task" "1. Show the task on the projector")
+     (button "start-brainstorming" "2. Start brainstorming")
+     (button "start-voting" "3. Start voting")
+     (button "show-voting-results" "4. Show voting results")])))
 
 (defn show-page-for-step [{:keys [remote-addr session] :as req}]
   "Show the right page for the current stage: gamemaster, team registr., voting"
@@ -93,7 +105,7 @@
         gm? (:gamemaster? session)]
    (cond
     (or gm? first-visitor?) {:session {:gamemaster? true},
-                             :body (page-gamemaster)} ; TODO set cookie to remember the gamemaster
+                             :body (page-gamemaster)}
     (= @state :brainstorming) (page-team-registration)
     (= @state :voting) (if (has-voted? req)
                            "Thank you for your vote!"
@@ -138,11 +150,11 @@
   (GET "/vote-results" [] (page-vote-results))
   (GET "/projector" []
        "TODO: Stuff showing on the projector: 1. the task; 2. /teams; 3. /vote-results")
-  (context "/command" [] ; GameMaster posts commands here
-           (POST "show-task" [] "TODO")
-           (POST "start-brainstorming" [] "TODO")
-           (POST "start-voting" [] "TODO")
-           (POST "show-voting-results" [] "TODO"))
+  (context "/command" [] ; GameMaster posts commands here (TODO? check it really is gm)
+           (POST "/show-task" [] "TODO")
+           #_(POST "/start-brainstorming" [] (str (compare-and-set! state :oldstate :newstate))) ;; CURRENTLY NOT NEEDED
+           (POST "/start-voting" [] (str (compare-and-set! state :brainstorming :voting)))
+           (POST "/show-voting-results" [] (str (compare-and-set! state :voting :voting-finished))))
   (route/resources "/")
   (route/not-found "Not Found"))
 
