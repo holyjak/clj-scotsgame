@@ -7,10 +7,11 @@
             [ring.middleware.session :refer [wrap-session]]
             [clojure.pprint]))
 
-(def state (atom :not-started))
+(def state (atom :voting #_:not-started))
 (def team-counter (atom 1))
 (def teams (atom {999 "Team 9's idea"}))
 (def votes (atom {998 1, 999 3}))
+(def voter-ips (atom #{}))
 
 (defn toint [numstr] (Integer/parseInt numstr))
 
@@ -86,23 +87,30 @@
      [:button bs "3. Start voting"]
      [:button bs "4. Show voting results"]])))
 
-(defn show-page-for-step [session]
+(defn show-page-for-step [{:keys [remote-addr session] :as req}]
   "Show the right page for the current stage: gamemaster, team registr., voting"
-  (clojure.pprint/pprint session)
   (let [first-visitor? (compare-and-set! state :not-started :brainstorming)
         gm? (:gamemaster? session)]
    (cond
     (or gm? first-visitor?) {:session {:gamemaster? true},
                              :body (page-gamemaster)} ; TODO set cookie to remember the gamemaster
     (= @state :brainstorming) (page-team-registration)
-    (= @state :voting) (page-vote))))
+    (= @state :voting) (if (has-voted? req)
+                           "Thank you for your vote!"
+                           (page-vote)))))
+
+(defn has-voted? [{:keys [remote-addr session]}]
+  (or
+   (@voter-ips remote-addr)
+   (:voted? session)))
 
 (defroutes app-routes
   "/ - depending on the current stage, show either game master's page, team-registration page, or voting page
    /team - new team registration, idea publication
    /teams - overview of all the existing, registered teams and their ideas
   "
-  (GET "/" {:keys [session]} (show-page-for-step session))
+  (GET "/" [:as req]
+       (show-page-for-step req))
   (context "/team" []
            (GET "/" [] (redirect (let [id (swap! team-counter inc)]  ; TODO assign picture/name of an animal
                                        (swap! teams assoc id "")
@@ -117,10 +125,15 @@
                    (redirect (str "/team/" id)))))
   (GET "/teams" []
        (page-teams))
-  (POST "/vote" [teamid] ; FIXME parse into int
-        (swap! votes (partial merge-with + {(toint teamid) 1}))
-        ;; TODO set cookie to prevent multiple votes
-        (str "Thank you for woting for team " teamid "!"))
+  (POST "/vote" [teamid :as req]
+        (if (has-voted? req)
+          "Sorry, but according to our shaky records, you have already voted"
+          (do
+            (swap! votes (partial merge-with + {(toint teamid) 1}))
+            ;; two re-voting preventions:
+            (swap! voter-ips conj (:remote-addr req))
+            {:session {:voted? true},
+             :body (str "Thank you for voting for team " teamid "!")})))
   (GET "/vote" [] "Sorry, you can only POST to this page")
   (GET "/vote-results" [] (page-vote-results))
   (GET "/projector" []
