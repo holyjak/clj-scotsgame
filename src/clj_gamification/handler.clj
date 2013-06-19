@@ -3,7 +3,9 @@
   (:require [compojure.handler :as handler]
             [compojure.route :as route]
             [hiccup.page :refer [html5]]
-            [ring.util.response :refer [redirect]]))
+            [ring.util.response :refer [redirect]]
+            [ring.middleware.session :refer [wrap-session]]
+            [clojure.pprint]))
 
 (def state (atom :not-started))
 (def team-counter (atom 1))
@@ -84,20 +86,23 @@
      [:button bs "3. Start voting"]
      [:button bs "4. Show voting results"]])))
 
-(defn show-page-for-step []
+(defn show-page-for-step [session]
   "Show the right page for the current stage: gamemaster, team registr., voting"
-  (let [first-visitor? (compare-and-set! state :not-started :brainstorming)]
+  (clojure.pprint/pprint session)
+  (let [first-visitor? (compare-and-set! state :not-started :brainstorming)
+        gm? (:gamemaster? session)]
    (cond
-     first-visitor? (page-gamemaster)  ; TODO set cookie to remember the gamemaster
-     (= @state :brainstorming) (page-team-registration)
-     (= @state :voting) (page-vote))))
+    (or gm? first-visitor?) {:session {:gamemaster? true},
+                             :body (page-gamemaster)} ; TODO set cookie to remember the gamemaster
+    (= @state :brainstorming) (page-team-registration)
+    (= @state :voting) (page-vote))))
 
 (defroutes app-routes
   "/ - depending on the current stage, show either game master's page, team-registration page, or voting page
    /team - new team registration, idea publication
    /teams - overview of all the existing, registered teams and their ideas
   "
-  (GET "/" [] (show-page-for-step))
+  (GET "/" {:keys [session]} (show-page-for-step session))
   (context "/team" []
            (GET "/" [] (redirect (let [id (swap! team-counter inc)]  ; TODO assign picture/name of an animal
                                        (swap! teams assoc id "")
@@ -129,4 +134,5 @@
   (route/not-found "Not Found"))
 
 (def app
-  (handler/site app-routes))
+  (-> (handler/site app-routes)
+      wrap-session))
