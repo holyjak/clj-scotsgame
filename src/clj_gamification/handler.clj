@@ -5,6 +5,7 @@
             [hiccup.page :refer [html5]]
             [ring.util.response :refer [redirect]]
             [ring.middleware.session :refer [wrap-session]]
+            [ring.middleware.session.memory :refer [memory-store]]
             [clojure.pprint]))
 
 (def state (atom :not-started))
@@ -12,6 +13,7 @@
 (def teams (atom {}))
 (def votes (atom {}))
 (def voter-ips (atom #{}))
+(def session-atom (atom {}))
 
 (defn toint [numstr] (Integer/parseInt numstr))
 
@@ -116,6 +118,17 @@
                            "Thank you for your vote!"
                            (page-vote)))))
 
+(defn reset-state []
+  "Reset GM, teams, votes etc. to be able to start from scratch. CAVEATS: Stuff saved in people's session won't be reset."
+  ;; => Consider using a random string as part of the session key
+  (reset! state :not-started)
+  (reset! team-counter 1)
+  (reset! teams {})
+  (reset! votes {})
+  (reset! voter-ips #{})
+  (clojure.pprint/pprint @session-atom)
+  (reset! session-atom {}))
+
 (defroutes app-routes
   "/ - depending on the current stage, show either game master's page, team-registration page, or voting page
    /team - new team registration, idea publication
@@ -155,11 +168,19 @@
            #_(POST "/start-brainstorming" [] (str (compare-and-set! state :oldstate :newstate))) ;; CURRENTLY NOT NEEDED
            (POST "/start-voting" [] (str (compare-and-set! state :brainstorming :voting)))
            (POST "/show-voting-results" [] (str (compare-and-set! state :voting :voting-finished))))
+  (GET "/reset" [sure]
+       (if sure
+         (do
+           (reset-state)
+           "Done resetting the state!")
+         (page "Reset"
+               [:p "Do you really want to reset the state, teams, votes? "
+                [:a {:href "/reset?sure=yes"} "Sure, reset it all!"]])))
   (route/resources "/")
   (route/not-found "Not Found"))
 
 (def app
   (-> (handler/site app-routes)
-      wrap-session))
+      (wrap-session {:store (memory-store session-atom)})))
 
-;; TIME USED: 3.5 + 1h
+;; TIME USED: (time-in-hrs + 3.5 1.5 1)
