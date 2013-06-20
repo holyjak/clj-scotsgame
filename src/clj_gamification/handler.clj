@@ -9,8 +9,8 @@
 
 (def state (atom :not-started))
 (def team-counter (atom 1))
-(def teams (atom {999 "Team 9's idea"}))
-(def votes (atom {998 1, 999 3}))
+(def teams (atom {}))
+(def votes (atom {}))
 (def voter-ips (atom #{}))
 
 (defn toint [numstr] (Integer/parseInt numstr))
@@ -43,7 +43,7 @@
   "Overveiw of all teams and their ideas"
   (page
    "Teams"
-   [:p "TODO: 10min countdown"]          ; TODO
+   [:p "TODO: 10min countdown"]          ; TODO counter, sort by ID
    (map
     (fn [[id idea]] [:p "#" id ": " idea])  ; TODO show picture, format the list nicely
     @teams)))
@@ -99,6 +99,11 @@
      (button "start-voting" "3. Start voting")
      (button "show-voting-results" "4. Show voting results")])))
 
+(defn has-voted? [{:keys [remote-addr session]}]
+  (or
+   ;(@voter-ips remote-addr) ; TODO disabled for easier testing from 1 pc
+   (:voted? session)))
+
 (defn show-page-for-step [{:keys [remote-addr session] :as req}]
   "Show the right page for the current stage: gamemaster, team registr., voting"
   (let [first-visitor? (compare-and-set! state :not-started :brainstorming)
@@ -110,11 +115,6 @@
     (= @state :voting) (if (has-voted? req)
                            "Thank you for your vote!"
                            (page-vote)))))
-
-(defn has-voted? [{:keys [remote-addr session]}]
-  (or
-   (@voter-ips remote-addr)
-   (:voted? session)))
 
 (defroutes app-routes
   "/ - depending on the current stage, show either game master's page, team-registration page, or voting page
@@ -161,3 +161,5 @@
 (def app
   (-> (handler/site app-routes)
       wrap-session))
+
+;; TIME USED: 3.5 + 1h

@@ -1,0 +1,6 @@
+/target
+/lib
+/checkouts
+pom.xml
+.lein-*
+.env
