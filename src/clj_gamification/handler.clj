@@ -6,6 +6,10 @@
             [ring.util.response :refer [redirect]]
             [ring.middleware.session :refer [wrap-session]]
             [ring.middleware.session.memory :refer [memory-store]]
+            [ring.middleware.file-info :refer :all]
+            ;[ring.middleware.file :refer :all]
+            [hiccup.bootstrap.middleware :refer [wrap-bootstrap-resources]]
+            [hiccup.bootstrap.page :refer :all]
             [clojure.pprint]))
 
 (def state (atom :not-started))
@@ -21,8 +25,11 @@
   "Page template"
   (html5
    [:head
-    [:title subtitle " :: Gamification"]]
-   [:body content]))
+    [:title subtitle " :: ScotsGame"]
+    [:meta {:name "viewport", :content "width=device-width, initial-scale=1.0"}]
+    (include-bootstrap)]
+   [:body (fixed-layout
+           content)]))
 
 (defn page-team-registration []
   "Team self-registration"
@@ -30,7 +37,7 @@
    "Team registration"
    [:h1 "Ready for an awesome discussion about gamification?"]
    [:form {:action "/team"}
-    [:button {:type "sumbit"} "Start a new team!"]]))
+    [:button.btn {:type "sumbit"} "Start a new team!"]]))
 
 (defn page-team-idea [team-id idea]
   "Form to submit name of team's gamification idea"
@@ -38,8 +45,11 @@
    "Idea"                               ; TODO better title
    [:form {:action (str "/team/" team-id "/idea"), :method "post"}
     [:label (str "Publish team " team-id "'s gamification idea:")
-     [:input {:type "text", :name "idea", :value idea, :title "Describe your idea"}]]
-    [:button {:type "submit"} "Publish"]]))
+     [:br]
+     [:input {:type "text", :name "idea", :value idea,
+              :autofocus "true",
+              :title "Describe your idea"}]]
+    [:button.btn {:type "submit"} "Publish"]]))
 
 (defn page-teams []
   "Overveiw of all teams and their ideas"
@@ -63,7 +73,7 @@
                        {:type "radio", :value id, :name "teamid", :required ""} ; TODO required has no effect?
                        "#" id ": " idea]]])  ; TODO show picture, format the list nicely
      @teams)
-    [:button {:type "submit"} "Vote!"]]))
+    [:button.btn {:type "submit"} "Vote!"]]))
 
 (defn page-vote-results []
   (page
@@ -79,7 +89,7 @@
   "Create JavaScript to perform a GM command in the background"
   (str "var xhr = new XMLHttpRequest();
       xhr.open('POST', '/command/" command "', true);
-      xhr.onload = function(e) {console.log('done with " command "');}
+      xhr.onload = function(e) {alert('done with " command "');}
       xhr.send();
 "))
 
@@ -91,7 +101,7 @@
    [:p "Your mission, should you decide to accept it: TODO:describe"] ; TODO Hide when read?
    [:h2 "Controls"]
    (letfn [(button [cmd label]
-             [:button
+             [:button.btn.btn-large
               {:style "display:block;width:100%;margin-bottom:10px",
                :onclick (command-js cmd)}
               label])]
@@ -181,6 +191,8 @@
 
 (def app
   (-> (handler/site app-routes)
-      (wrap-session {:store (memory-store session-atom)})))
+      (wrap-session {:store (memory-store session-atom)})
+      (wrap-bootstrap-resources)
+      (wrap-file-info)))
 
 ;; TIME USED: (time-in-hrs + 3.5 1.5 1)
