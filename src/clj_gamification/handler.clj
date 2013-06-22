@@ -35,17 +35,22 @@
    [:form#newGroupForm {:action "/team"}
     [:button.btn {:type "sumbit"} "Start a new team!"]]))
 
-(defn page-team-idea [team-id idea]
+(defn page-team-idea [team-id idea published]
   "Form to submit name of team's gamification idea"
   (page
    "Idea"                               ; TODO better title
+   (when published
+     [:p.text-success "Your idea has been published"])
    [:form {:action (str "/team/" team-id "/idea"), :method "post"}
     [:label (str "Publish team " team-id "'s gamification idea:")
      [:br]
      [:input {:type "text", :name "idea", :value idea,
               :autofocus "true",
               :title "Describe your idea"}]]
-    [:button.btn {:type "submit"} "Publish"]]))
+    [:button.btn {:type "submit"} "Publish"]]
+   [:p "Or "
+    [:a {:href "/await-vote"} "await voting for the best idea"]
+    " to be started"]))
 
 (defn page-teams [teams]
   "Overveiw of all teams and their ideas"
@@ -89,8 +94,9 @@
       xhr.send();
 "))
 
-(defn page-gamemaster []
+(defn page-gamemaster
   "Control page for the GameMaster: 1. task info, 2. show task to others, 3. start brainstorming?, 4. start voting, 5. show number voted, 6. show voting results"
+  []
   (page
    "GameMaster Control"
    [:h1 "You control the game!"]
@@ -106,6 +112,16 @@
      (button "start-brainstorming" "2. Start brainstorming")
      (button "start-voting" "3. Start voting")
      (button "show-voting-results" "4. Show voting results")])))
+
+(defn page-await-vote [referer]
+  (page "Awaiting voting..."
+        [:p "Do "
+         [:a {:href "/vote"} "vote for the best idea"]
+         " once voting is opened"]
+        (when referer
+          [:p "(Or "
+           [:a {:href referer} "go back"]
+           " where you came from.)"])))
 
 (defn has-voted? [{:keys [remote-addr session]}]
   (or
@@ -152,14 +168,14 @@
               (GET "/" [] (redirect (let [id (swap! team-counter inc)] ; TODO assign picture/name of an animal
                                       (swap! teams assoc id "")
                                       (str "/team/" id))))
-              (GET "/:id" [id]
+              (GET "/:id" [id published]
                    (let [id (toint id)
                          idea (get @teams id)]
-                     (page-team-idea id idea)))
+                     (page-team-idea id idea published)))
               (POST "/:id/idea" [id idea]
                     (let [id (toint id)]
                       (swap! teams assoc id idea) ; TODO notify visibly that the idea has been published; notify /teams page
-                      (redirect (str "/team/" id)))))
+                      (redirect (str "/team/" id "?published=true")))))
      (GET "/teams" []
           (page-teams @teams))
      (POST "/vote" [teamid :as req]
@@ -172,7 +188,11 @@
                (swap! voter-ips conj (:remote-addr req))
                {:session {:voted? true},
                 :status 201
-                :body (str "Thank you for voting for team " teamid "!")})))
+                :body (page "Voted" [:p "Thank you for voting for team " teamid "!"])})))
+     (GET "/await-vote" [:as req]
+          (if (= :voting state)
+            (redirect "/vote")
+            (page-await-vote (get-in req [:headers "referer"]))))
      (GET "/vote" [] "Sorry, you can only POST to this page")
      (GET "/vote-results" [] (page-vote-results @teams @votes))
      (GET "/projector" []
