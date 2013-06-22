@@ -32,7 +32,7 @@
   (page
    "Team registration"
    [:h1 "Ready for an awesome discussion about gamification?"]
-   [:form {:action "/team"}
+   [:form#newGroupForm {:action "/team"}
     [:button.btn {:type "sumbit"} "Start a new team!"]]))
 
 (defn page-team-idea [team-id idea]
@@ -101,7 +101,7 @@
               {:style "display:block;width:100%;margin-bottom:10px",
                :onclick (command-js cmd)}
               label])]
-    [:div
+    [:div#gmControls
      (button "show-task" "1. Show the task on the projector")
      (button "start-brainstorming" "2. Start brainstorming")
      (button "start-voting" "3. Start voting")
@@ -149,7 +149,7 @@
      (GET "/" [:as req]
           (show-page-for-step system req))
      (context "/team" []
-              (GET "/" [] (redirect (let [id (swap! (team-counter) inc)] ; TODO assign picture/name of an animal
+              (GET "/" [] (redirect (let [id (swap! team-counter inc)] ; TODO assign picture/name of an animal
                                       (swap! teams assoc id "")
                                       (str "/team/" id))))
               (GET "/:id" [id]
@@ -164,12 +164,14 @@
           (page-teams @teams))
      (POST "/vote" [teamid :as req]
            (if (has-voted? req)
-             "Sorry, but according to our shaky records, you have already voted"
+             {:status 410,
+              :body "Sorry, but according to our shaky records, you have already voted"}
              (do
                (swap! votes (partial merge-with + {(toint teamid) 1}))
                ;; two re-voting preventions:
                (swap! voter-ips conj (:remote-addr req))
                {:session {:voted? true},
+                :status 201
                 :body (str "Thank you for voting for team " teamid "!")})))
      (GET "/vote" [] "Sorry, you can only POST to this page")
      (GET "/vote-results" [] (page-vote-results @teams @votes))
@@ -212,12 +214,7 @@
            (wrap-bootstrap-resources)
            (wrap-file-info)))))
 
-;;(def dynamic-app (init))
 (def app (init))
-
-(defn myapp [req]
-  (let [routes (init)]
-    (routes req)))
 
 (defn reset-state
   "Reset GM, teams, votes etc. to be able to start from scratch."
@@ -226,7 +223,7 @@
   ;; TODO? we should perhaps sync the restets to do them as 1 atomic operation?
   (reset! (:state system) :not-started)
   (reset! (:team-counter system) 1)
-  (reset! (:teams system) {123 "my harcoded after-reset team"})
+  (reset! (:teams system) {})
   (reset! (:votes system) {})
   (reset! (:voter-ips system) #{}))
 ;; TIME USED: (time-in-hrs + 3.5 1.5 1 + 1) + (13.30 - ?)
