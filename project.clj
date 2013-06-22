@@ -8,7 +8,8 @@
   :plugins [[lein-ring "0.8.5"]]
   :ring {:handler clj-gamification.handler/app, :auto-refresh? true, :nrepl {:start? true #_(:port 7000)}}
   :profiles
-  {:dev {:dependencies [[ring-mock "0.1.5"]]},
+  {:dev {:source-paths ["dev"],
+         :dependencies [[ring-mock "0.1.5"]]},
    :production {:misc "configuration", ; app-specific stuff
                 :mirrors {"central" "http://s3pository.herokuapp.com/clojure"}}}
   :min-lein-version "2.0.0") ;; ring-serve has old hiccup
