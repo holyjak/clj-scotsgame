@@ -24,6 +24,7 @@
     [:title subtitle " :: ScotsGame"]
     [:meta {:name "viewport", :content "width=device-width, initial-scale=1.0"}]
     (include-bootstrap)]
+   [:style {:type "text/css"} "h1 {font-size:180%} h2 {font-size:160%}"]
    [:body (fixed-layout
            content)]))
 
@@ -56,6 +57,7 @@
   "Overveiw of all teams and their ideas"
   (page
    "Teams"
+   [:h1 "Teams & Topics"]
    [:p "TODO: 10min countdown"]          ; TODO counter, sort by ID
    (map
     (fn [[id idea]] [:p "#" id ": " idea])  ; TODO show picture, format the list nicely
@@ -123,6 +125,20 @@
            [:a {:href referer} "go back"]
            " where you came from.)"])))
 
+(defn page-projector-prestart []
+  (page "Projector"
+        [:p {:style "text-align:center;font-size:200px;line-height:200px;margin:auto"} "?"]))
+
+(defn page-projector-task []
+  (page "Projector"
+        [:h1 "The Gamification Challenge"]
+        [:p "Your task is ..."]))
+
+(defn page-projector-voting-ongoing []
+  (page "Projector"
+        [:h1 "Voting in progress..."]
+        ))
+
 (defn has-voted? [{:keys [remote-addr session]}]
   (or
    ;(@voter-ips remote-addr) ; TODO disabled for easier testing from 1 pc
@@ -156,7 +172,8 @@
         team-counter (:team-counter system)
         teams (:teams system)
         votes (:votes system)
-        voter-ips (:voter-ips system)]
+        voter-ips (:voter-ips system)
+        projector (:projector system)]
       (defroutes app-routes
      "/ - depending on the current stage, show either game master's page, team-registration page, or voting page
    /team - new team registration, idea publication
@@ -196,12 +213,21 @@
      (GET "/vote" [] "Sorry, you can only POST to this page")
      (GET "/vote-results" [] (page-vote-results @teams @votes))
      (GET "/projector" []
-          "TODO: Stuff showing on the projector: 1. the task; 2. /teams; 3. /vote-results")
+          (condp = @projector
+            :prestart (page-projector-prestart)
+            :task (page-projector-task)
+            :teams (page-teams @teams)
+            :voting (page-projector-voting-ongoing)
+            :results (page-vote-results @teams @votes)))
      (context "/command" [] ; GameMaster posts commands here (TODO? check it really is gm)
-              (POST "/show-task" [] "TODO")
-              #_(POST "/start-brainstorming" [] (str (compare-and-set! state :oldstate :newstate))) ;; CURRENTLY NOT NEEDED
-              (POST "/start-voting" [] (str (compare-and-set! state :brainstorming :voting)))
-              (POST "/show-voting-results" [] (str (compare-and-set! state :voting :voting-finished))))
+              (POST "/show-task" [] (str (compare-and-set! projector :prestart :task)))
+              (POST "/start-brainstorming" [] (str (compare-and-set! projector :task :teams)))
+              (POST "/start-voting" [] (str (and
+                                             (compare-and-set! state :brainstorming :voting)
+                                             (swap! projector (constantly :voting)))))
+              (POST "/show-voting-results" [] (str (and
+                                                    (compare-and-set! state :voting :voting-finished)
+                                                    (swap! projector (constantly :results))))))
      (GET "/reset" [sure]
           (if sure
             (do
@@ -221,7 +247,8 @@
             :team-counter (atom 1),
             :teams (atom {}),
             :votes (atom {}),
-            :voter-ips (atom #{})}
+            :voter-ips (atom #{})
+            :projector (atom :prestart)}
            defaults))
 
 (defn init
