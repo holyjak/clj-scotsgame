@@ -26,7 +26,8 @@
     (include-bootstrap)]
    [:style {:type "text/css"} "h1 {font-size:180%} h2 {font-size:160%}"]
    [:body (fixed-layout
-           content)]))
+           content
+           [:p {:style "font-size:xx-small;border-top:1px solid grey;margin-top:3em;text-align:right;"} "Powered by Clojure"])]))
 
 (defn page-team-registration []
   "Team self-registration"
