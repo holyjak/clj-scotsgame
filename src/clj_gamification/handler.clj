@@ -3,6 +3,7 @@
   (:require [compojure.handler :as handler]
             [compojure.route :as route]
             [hiccup.page :refer [html5]]
+            [org.httpkit.server :refer :all #_[run-server with-channel Channel]]
             [ring.util.response :refer [redirect]]
             [ring.middleware.session :refer [wrap-session]]
             [ring.middleware.session.memory :refer [memory-store]]
@@ -11,7 +12,8 @@
             [hiccup.bootstrap.middleware :refer [wrap-bootstrap-resources]]
             [hiccup.bootstrap.page :refer :all]
             [clojure.pprint]
-            [clojure.tools.logging :refer (info error)]))
+            [clojure.tools.logging :refer (info error)])
+  (:gen-class))
 
 (declare reset-state)
 
@@ -158,6 +160,18 @@
                            "Thank you for your vote!"
                            (page-vote @teams)))))
 
+
+;;; For a simple example of WS usage in the browser see http://www.html5rocks.com/en/tutorials/websockets/basics/
+;;; var connection = new WebSocket('ws://me:8080/ws')
+;;; connection.onmessage = function (e) { console.log('Server: ' + e.data); }; // also onerror, onopen
+;;; connection.send('your message');
+(defn ws-handler "Websocket handler for http-kit" [request]
+  (with-channel request channel
+    (on-close channel (fn [status] (println "channel closed: " status)))
+    (on-receive channel (fn [data] ;; echo it back; data = e.g. String - see clojure.data.json
+                          (send! channel data)))) ;; TODO
+  )
+
 ;;; Having this fun to create routes to be able to pass system as an argument into them is wierd, seems to g
 ;;; against the logic of Compojure and is ugly because calling it again will change the var 'app-routes' def.
 ;;; by the macro. Is there a better way? Should we just put system into an atom (and reset! it before each test?)
@@ -237,6 +251,7 @@
             (page "Reset"
                   [:p "Do you really want to reset the state, teams, votes? "
                    [:a {:href "/reset?sure=yes"} "Sure, reset it all!"]])))
+     (GET "/ws" [] ws-handler)
      (route/resources "/")
      (route/not-found "Not Found"))))
 
@@ -274,5 +289,10 @@
   (reset! (:teams system) {})
   (reset! (:votes system) {})
   (reset! (:voter-ips system) #{}))
-;; TIME USED: (time-in-hrs + 3.5 1.5 1 + 1) + (13.30 - ?)
+;; TIME USED: (time-in-hrs + 3.5 1.5 1 + 1) + (5h lørdag, 1t søndag)
 ;; incl.: learning and setting up heroku (1h), learning/troubleshooting (2+h)
+
+(def server-stop-fn (atom nil))
+
+(defn -main [port] ;; entry point
+  (swap! server-stop-fn (constantly (run-server app {:port (Integer/parseInt port)}))))
