@@ -2,7 +2,7 @@
   (:use compojure.core)
   (:require [compojure.handler :as handler]
             [compojure.route :as route]
-            [hiccup.page :refer [html5]]
+            [hiccup.page :refer [html5 include-js]]
             [org.httpkit.server :refer :all #_[run-server with-channel Channel]]
             [ring.util.response :refer [redirect]]
             [ring.middleware.session :refer [wrap-session]]
@@ -12,7 +12,8 @@
             [hiccup.bootstrap.middleware :refer [wrap-bootstrap-resources]]
             [hiccup.bootstrap.page :refer :all]
             [clojure.pprint]
-            [clojure.tools.logging :refer (info error)])
+            [clojure.tools.logging :refer (info error)]
+            [clojure.data.json :as json])
   (:gen-class))
 
 (declare reset-state)
@@ -25,8 +26,9 @@
    [:head
     [:title subtitle " :: ScotsGame"]
     [:meta {:name "viewport", :content "width=device-width, initial-scale=1.0"}]
-    (include-bootstrap)]
-   [:style {:type "text/css"} "h1 {font-size:180%} h2 {font-size:160%}"]
+    (include-bootstrap)
+    (include-js "/js/scotsgame.js")
+    [:style {:type "text/css"} "h1 {font-size:180%} h2 {font-size:160%}"]]
    [:body (fixed-layout
            content
            [:p {:style "font-size:xx-small;border-top:1px solid grey;margin-top:3em;text-align:right;"} "Powered by Clojure"])]))
@@ -168,8 +170,9 @@
 (defn ws-handler "Websocket handler for http-kit" [request]
   (with-channel request channel
     (on-close channel (fn [status] (println "channel closed: " status)))
-    (on-receive channel (fn [data] ;; echo it back; data = e.g. String - see clojure.data.json
-                          (send! channel data)))) ;; TODO
+    (on-receive channel (fn [event-json] ;; echo it back; data = e.g. String - see clojure.data.json
+                          (let [{:strs [event data] :as m} (json/read-str event-json)]
+                            (send! channel (json/write-str {:event "pong", :data data})))))) ;; TODO
   )
 
 ;;; Having this fun to create routes to be able to pass system as an argument into them is wierd, seems to g
@@ -252,7 +255,7 @@
                   [:p "Do you really want to reset the state, teams, votes? "
                    [:a {:href "/reset?sure=yes"} "Sure, reset it all!"]])))
      (GET "/ws" [] ws-handler)
-     (route/resources "/")
+     (route/resources "/") ; TODO Cache-Control: max-age; see also  ring-etag-middleware
      (route/not-found "Not Found"))))
 
 (defn system
@@ -295,4 +298,10 @@
 (def server-stop-fn (atom nil))
 
 (defn -main [port] ;; entry point
-  (swap! server-stop-fn (constantly (run-server app {:port (Integer/parseInt port)}))))
+  (let [port (Integer/parseInt port)]
+    (swap! server-stop-fn (constantly (run-server app {:port port})))
+    (str "Started at port " port)))
+
+(comment ;; for use in REPL
+  (-main "5000")
+  )

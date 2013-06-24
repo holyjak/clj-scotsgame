@@ -1,1 +1,1 @@
-web: lein with-profile production trampoline ring server-headless $PORT
+web: lein run $PORT

@@ -6,9 +6,10 @@
                  [http-kit "2.1.4"]
                  [compojure "1.1.5"]
                  [hiccup "1.0.3"]
-                 [hiccup-bootstrap "0.1.2"]]
-  :plugins [[lein-ring "0.8.5"]]
-  :ring {:handler clj-gamification.handler/app, :auto-refresh? true, :nrepl {:start? true #_(:port 7000)}}
+                 [hiccup-bootstrap "0.1.2"]
+                 [org.clojure/data.json "0.2.2"]]
+  ;:plugins [[lein-ring "0.8.5"]]
+  ;:ring {:handler clj-gamification.handler/app, :auto-refresh? true, :nrepl {:start? true #_(:port 7000)}}
   :main clj-gamification.handler
   :profiles
   {:dev {:source-paths ["dev"],
