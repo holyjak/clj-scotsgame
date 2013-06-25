@@ -73,9 +73,16 @@
    (include-changepoll-js)
    [:h1 "Teams & Topics"]
    [:p "TODO: 10min countdown"]          ; TODO counter, sort by ID
-   (map
-    (fn [[id idea]] [:p "#" id ": " idea])  ; TODO show picture, format the list nicely
-    teams)))
+   [:ul (map
+      (fn [[id idea]] [:li "#" id ": " idea])  ; TODO show picture, format the list nicely
+      teams)]
+   [:h4 "Ideas structuring tip: D6"]
+   [:ol
+    [:li "DEFINE business objectives: ..."]
+    [:li "DELINEATE target behaviors: ..."]
+    [:li "DESCRIBE your players: ..."]
+    [:li "DEVISE activity loops: ..."]
+    [:li "[5+6] DON’T forget the FUN & DEPLOY the appropriate tools: ..."]]))
 
 (defn page-vote [teams]
   "Vote for a gamification idea"
