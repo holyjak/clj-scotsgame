@@ -20,8 +20,8 @@
 
 (defn toint [numstr] (Integer/parseInt numstr))
 
-(defn include-projectorpoll-js [current-state]
-  [:script {:type "text/javascript"} "window.onload=function(){projector_poll('" current-state "');};"])
+(defn include-changepoll-js []
+  [:script {:type "text/javascript"} "window.onload=function(){pollForChange();};"])
 
 (defn page [subtitle & content]
   "Page template"
@@ -70,7 +70,7 @@
   "Overveiw of all teams and their ideas"
   (page
    "Teams"
-   (include-projectorpoll-js "teams")
+   (include-changepoll-js)
    [:h1 "Teams & Topics"]
    [:p "TODO: 10min countdown"]          ; TODO counter, sort by ID
    (map
@@ -106,7 +106,7 @@
   "Create JavaScript to perform a GM command in the background"
   (str "var xhr = new XMLHttpRequest();
       xhr.open('POST', '/command/" command "', true);
-      xhr.onload = function(e) {alert('done with " command "');}
+      xhr.onload = function(e) {alert('done with " command ": ' + this.responseText);}
       xhr.send();
 "))
 
@@ -141,18 +141,18 @@
 
 (defn page-projector-prestart []
   (page "Projector"
-        (include-projectorpoll-js "prestart")
+        (include-changepoll-js)
         [:p {:style "text-align:center;font-size:200px;line-height:200px;margin:auto"} "?"]))
 
 (defn page-projector-task []
   (page "Projector"
-        (include-projectorpoll-js "task")
+        (include-changepoll-js)
         [:h1 "The Gamification Challenge"]
         [:p "Your task is ..."]))
 
 (defn page-projector-voting-ongoing []
   (page "Projector"
-        (include-projectorpoll-js "voting")
+        (include-changepoll-js)
         [:h1 "Voting in progress..."]
         ))
 
@@ -174,36 +174,23 @@
                            "Thank you for your vote!"
                            (page-vote @teams)))))
 
+(def state-changed-semafor "Synchronization object to wait on to be notified about important state changes" (Object.))
 
-;;; For a simple example of WS usage in the browser see http://www.html5rocks.com/en/tutorials/websockets/basics/
-;;; var connection = new WebSocket('ws://me:8080/ws')
-;;; connection.onmessage = function (e) { console.log('Server: ' + e.data); }; // also onerror, onopen
-;;; connection.send('your message');
-(defn ws-handler "Websocket handler for http-kit" [request]
+(defn notify-change-listeners
+  "Notify waiters that the value of the atom has changed"
+  [_ atom oldval newval]
+  (locking state-changed-semafor
+    (.notifyAll state-changed-semafor)))
+
+(defn poll-handler [request]
   (with-channel request channel
-    (on-close channel (fn [status] (println "channel closed: " status)))
-    (on-receive channel (fn [event-json] ;; echo it back; data = e.g. String - see clojure.data.json
-                          (let [{:strs [event data] :as m} (json/read-str event-json)]
-                            (send! channel (json/write-str {:event "pong", :data data})))))) ;; TODO
-  )
-
-(defn watch-projector-state
-  "Notify all waiters that the value of projector has changed; triggerd by add-watch on it."
-  [_ projector oldval newval]
-  (locking projector
-    (.notifyAll projector)))
-
-(defn poll-handler-projector [request projector current-display]
-  (with-channel request channel
-    (when (= current-display (name @projector))
-      (locking projector
-        (try
-          (.wait projector))
-        (catch InterruptedException e (info (str "Interrupted while waiting for projector change: " e)))))
+    (locking state-changed-semafor
+      (try
+        (.wait state-changed-semafor))
+      (catch InterruptedException e (info (str "Interrupted while waiting for atom change: " e))))
     (send! channel {:status 200
                     :headers {"Content-Type" "application/json; charset=utf-8"}
-                    :body (name @projector)}
-                                        ; send! and close. just be explicit, true is the default for streaming/polling,
+                    :body "{}"}
            true)))
 
 ;;; Having this fun to create routes to be able to pass system as an argument into them is wierd, seems to g
@@ -285,9 +272,8 @@
             (page "Reset"
                   [:p "Do you really want to reset the state, teams, votes? "
                    [:a {:href "/reset?sure=yes"} "Sure, reset it all!"]])))
-     (GET "/ws" [] ws-handler)
      (context "/poll" []
-              (GET "/projector-state" [current :as req] (poll-handler-projector req projector current)))
+              (GET "/state-change" [:as req] (poll-handler req)))
      (route/resources "/") ; TODO Cache-Control: max-age; see also  ring-etag-middleware
      (route/not-found "Not Found"))))
 
@@ -302,14 +288,18 @@
                              :voter-ips (atom #{})
                              :projector (atom :prestart)}
                             defaults)]
-               (add-watch (:projector result) :projector-display watch-projector-state)
+               (add-watch (:projector result) :projector-display notify-change-listeners)
+               (add-watch (:teams result) :teams-display notify-change-listeners)
                result))
+
+(def current-system (atom nil))
 
 (defn init
   "Init the current system, optionally with a default system, returning a Ring handler"
   ([] (init nil))
   ([defaults]
      (let [system (system defaults)]
+       (swap! current-system (constantly system))
        (-> (handler/site (make-app-routes system))
            (wrap-session {:store (memory-store (:session-atom system))})
            (wrap-bootstrap-resources)
