@@ -20,6 +20,9 @@
 
 (defn toint [numstr] (Integer/parseInt numstr))
 
+(defn include-projectorpoll-js [current-state]
+  [:script {:type "text/javascript"} "window.onload=function(){projector_poll('" current-state "');};"])
+
 (defn page [subtitle & content]
   "Page template"
   (html5
@@ -33,13 +36,19 @@
            content
            [:p {:style "font-size:xx-small;border-top:1px solid grey;margin-top:3em;text-align:right;"} "Powered by Clojure"])]))
 
+(def await-voting-html
+  [:p "Or "
+    [:a {:href "/await-vote"} "await voting for the best idea"]
+    " to be started"])
+
 (defn page-team-registration []
   "Team self-registration"
   (page
    "Team registration"
    [:h1 "Ready for an awesome discussion about gamification?"]
    [:form#newGroupForm {:action "/team"}
-    [:button.btn {:type "sumbit"} "Start a new team!"]]))
+    [:button.btn {:type "sumbit"} "Start a new team!"]]
+   await-voting-html))
 
 (defn page-team-idea [team-id idea published]
   "Form to submit name of team's gamification idea"
@@ -54,14 +63,14 @@
               :autofocus "true",
               :title "Describe your idea"}]]
     [:button.btn {:type "submit"} "Publish"]]
-   [:p "Or "
-    [:a {:href "/await-vote"} "await voting for the best idea"]
-    " to be started"]))
+   await-voting-html
+   ))
 
 (defn page-teams [teams]
   "Overveiw of all teams and their ideas"
   (page
    "Teams"
+   (include-projectorpoll-js "teams")
    [:h1 "Teams & Topics"]
    [:p "TODO: 10min countdown"]          ; TODO counter, sort by ID
    (map
@@ -123,7 +132,7 @@
 (defn page-await-vote [referer]
   (page "Awaiting voting..."
         [:p "Do "
-         [:a {:href "/vote"} "vote for the best idea"]
+         [:a {:href "/"} "vote for the best idea"]
          " once voting is opened"]
         (when referer
           [:p "(Or "
@@ -132,15 +141,18 @@
 
 (defn page-projector-prestart []
   (page "Projector"
+        (include-projectorpoll-js "prestart")
         [:p {:style "text-align:center;font-size:200px;line-height:200px;margin:auto"} "?"]))
 
 (defn page-projector-task []
   (page "Projector"
+        (include-projectorpoll-js "task")
         [:h1 "The Gamification Challenge"]
         [:p "Your task is ..."]))
 
 (defn page-projector-voting-ongoing []
   (page "Projector"
+        (include-projectorpoll-js "voting")
         [:h1 "Voting in progress..."]
         ))
 
@@ -174,6 +186,25 @@
                           (let [{:strs [event data] :as m} (json/read-str event-json)]
                             (send! channel (json/write-str {:event "pong", :data data})))))) ;; TODO
   )
+
+(defn watch-projector-state
+  "Notify all waiters that the value of projector has changed; triggerd by add-watch on it."
+  [_ projector oldval newval]
+  (locking projector
+    (.notifyAll projector)))
+
+(defn poll-handler-projector [request projector current-display]
+  (with-channel request channel
+    (when (= current-display (name @projector))
+      (locking projector
+        (try
+          (.wait projector))
+        (catch InterruptedException e (info (str "Interrupted while waiting for projector change: " e)))))
+    (send! channel {:status 200
+                    :headers {"Content-Type" "application/json; charset=utf-8"}
+                    :body (name @projector)}
+                                        ; send! and close. just be explicit, true is the default for streaming/polling,
+           true)))
 
 ;;; Having this fun to create routes to be able to pass system as an argument into them is wierd, seems to g
 ;;; against the logic of Compojure and is ugly because calling it again will change the var 'app-routes' def.
@@ -255,20 +286,24 @@
                   [:p "Do you really want to reset the state, teams, votes? "
                    [:a {:href "/reset?sure=yes"} "Sure, reset it all!"]])))
      (GET "/ws" [] ws-handler)
+     (context "/poll" []
+              (GET "/projector-state" [current :as req] (poll-handler-projector req projector current)))
      (route/resources "/") ; TODO Cache-Control: max-age; see also  ring-etag-middleware
      (route/not-found "Not Found"))))
 
 (defn system
   "Returns a new instance of the whole application."
-  [defaults] (merge
-           {:session-atom (atom {})
-            :state (atom :not-started),
-            :team-counter (atom 1),
-            :teams (atom {}),
-            :votes (atom {}),
-            :voter-ips (atom #{})
-            :projector (atom :prestart)}
-           defaults))
+  [defaults] (let [result (merge
+                            {:session-atom (atom {})
+                             :state (atom :not-started),
+                             :team-counter (atom 1),
+                             :teams (atom {}),
+                             :votes (atom {}),
+                             :voter-ips (atom #{})
+                             :projector (atom :prestart)}
+                            defaults)]
+               (add-watch (:projector result) :projector-display watch-projector-state)
+               result))
 
 (defn init
   "Init the current system, optionally with a default system, returning a Ring handler"
@@ -295,11 +330,12 @@
 ;; TIME USED: (time-in-hrs + 3.5 1.5 1 + 1) + (5h lørdag, 1t søndag)
 ;; incl.: learning and setting up heroku (1h), learning/troubleshooting (2+h)
 
-(def server-stop-fn (atom nil))
+(def ^{:static true} server-stop-fn (atom nil))
 
 (defn -main [port] ;; entry point
-  (let [port (Integer/parseInt port)]
-    (swap! server-stop-fn (constantly (run-server app {:port port})))
+  (let [port (Integer/parseInt port)
+        server-stop (run-server app {:port port})]
+    (swap! server-stop-fn (constantly server-stop))
     (str "Started at port " port)))
 
 (comment ;; for use in REPL
