@@ -167,8 +167,10 @@
   (let [first-visitor? (compare-and-set! state :not-started :brainstorming)
         gm? (:gamemaster? session)]
    (cond
-    (or gm? first-visitor?) {:session {:gamemaster? true},
-                             :body (page-gamemaster)}
+    (or gm? first-visitor?) (do
+                              (info (str "GM access; first? " first-visitor? ", session " (-> req :cookies (get "ring-session") :value) ", ip " (:remote-addr req)))
+                              {:session {:gamemaster? true},
+                              :body (page-gamemaster)})
     (= @state :brainstorming) (page-team-registration)
     (= @state :voting) (if (has-voted? req)
                            "Thank you for your vote!"
