@@ -53,15 +53,28 @@
 (defn page-team-idea [team-id idea published]
   "Form to submit name of team's gamification idea"
   (page
-   "Idea"                               ; TODO better title
+   "Idea"
    (when published
      [:p.text-success "Your idea has been published"])
    [:form {:action (str "/team/" team-id "/idea"), :method "post"}
-    [:label (str "Publish team " team-id "'s gamification idea:")
-     [:br]
-     [:input {:type "text", :name "idea", :value idea,
-              :autofocus "true",
-              :title "Describe your idea"}]]
+    [:h1 (str "Publish team " team-id "'s gamification idea:")]
+    [:br]
+    (let [ideas ["Increase trashbin usage in parks." "Increase e-book reading platform usage." "Increase consumption of vegetables." "Increase motivation to try/learn new stuff."]]
+      [:ul.unstyled
+       (map (fn [id] [:li [:label.radio
+                          [:input {:type "radio", :name "idea", :value id}]
+                          " "
+                          id]
+                     [:br]])
+            ideas)
+       [:li
+        [:label.radio
+         [:input#custIdeaIn {:type "radio", :name "idea"}
+          [:input {:type "text", :value idea,
+                   :autofocus "true",
+                   :placeholder "Your own idea",
+                   :title "Describe your idea"
+                   :onchange "document.getElementById('custIdeaIn').value=this.value;"}]]]]])
     [:button.btn {:type "submit"} "Publish"]]
    await-voting-html
    ))
@@ -72,10 +85,11 @@
    "Teams"
    (include-changepoll-js)
    [:h1 "Teams & Topics"]
-   [:p "TODO: 10min countdown"]          ; TODO counter, sort by ID
-   [:ul (map
-      (fn [[id idea]] [:li "#" id ": " idea])  ; TODO show picture, format the list nicely
-      teams)]
+   [:p [:strong "You have 10 min for brainstorming"]]          ; TODO counter, sort by ID
+   [:p "Teams:"]
+   [:ol (map
+      (fn [[id idea]] [:li "#" id ": " idea])  ; TODO show picture
+      (sort-by first teams))]
    [:h4 "Ideas structuring tip: D6"]
    [:ol
     [:li "DEFINE business objectives: ..."]
@@ -123,7 +137,8 @@
   (page
    "GameMaster Control"
    [:h1 "You control the game!"]
-   [:p "Your mission, should you decide to accept it: TODO:describe"] ; TODO Hide when read?
+   [:p "Your mission, should you decide to accept it: Challenge the participants to group and brainstorm in 10 min interesting gamification ideas, present them, and then vote for the best one."]
+   [:p "Use the buttons below in order to move between the phases, changing what's shown on the projector."] ; TODO Hide when read?
    [:h2 "Controls"]
    (letfn [(button [cmd label]
              [:button.btn.btn-large
@@ -155,7 +170,9 @@
   (page "Projector"
         (include-changepoll-js)
         [:h1 "The Gamification Challenge"]
-        [:p "Your task is ..."]))
+        [:p "Gamification in praxis! Group with the people around and brainstorm a cool way to gamify a common task/problem. Describe briefly your idea to the other teams and vote for the best one."]
+        [:p "Some ideas for what to increase via gamification: Trashbin usage in parks. E-book reading platform usage. Consumption of vegetables. Motivation to try/learn new stuff. (Listed also on the team registration page.)"]
+        [:p "Be quick: The 1st and 3rd registered teams get a nice surprise!"]))
 
 (defn page-projector-voting-ongoing []
   (page "Projector"
@@ -165,7 +182,6 @@
 
 (defn has-voted? [{:keys [remote-addr session]}]
   (or
-   ;(@voter-ips remote-addr) ; TODO disabled for easier testing from 1 pc
    (:voted? session)))
 
 (defn show-page-for-step [{:keys [teams state]}
@@ -236,6 +252,7 @@
                      (page-team-idea id idea published)))
               (POST "/:id/idea" [id idea]
                     (let [id (toint id)]
+                      (info (str "idea posted: " idea))
                       (swap! teams assoc id idea) ; TODO notify visibly that the idea has been published; notify /teams page
                       (redirect (str "/team/" id "?published=true")))))
      (GET "/teams" []
@@ -264,7 +281,7 @@
             :teams (page-teams @teams)
             :voting (page-projector-voting-ongoing)
             :results (page-vote-results @teams @votes)))
-     (context "/command" [] ; GameMaster posts commands here (TODO? check it really is gm)
+     (context "/command" [] ; GameMaster posts commands here
               (POST "/show-task" [] (str (compare-and-set! projector :prestart :task)))
               (POST "/start-brainstorming" [] (str (compare-and-set! projector :task :teams)))
               (POST "/start-voting" [] (str (and
