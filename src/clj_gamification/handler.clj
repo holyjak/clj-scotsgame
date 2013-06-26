@@ -12,16 +12,23 @@
             [hiccup.bootstrap.middleware :refer [wrap-bootstrap-resources]]
             [hiccup.bootstrap.page :refer :all]
             [clojure.pprint]
+            [clojure.string]
+            [clojure.set :refer [intersection]]
             [clojure.tools.logging :refer (info error)]
             [clojure.data.json :as json])
   (:gen-class))
 
 (declare reset-state)
 
+(def change-events (atom [])) ;; TODO move to the state object
+(def change-callbacks (atom #{}))
+
 (defn toint [numstr] (Integer/parseInt numstr))
 
-(defn include-changepoll-js []
-  [:script {:type "text/javascript"} "window.onload=function(){pollForChange();};"])
+(defn include-changepoll-js [& event-keys]
+  (let [last-event-id (max 0 (dec (count @change-events)))
+        events (clojure.string/join "," (map name event-keys))]
+    [:script {:type "text/javascript"} "window.onload=function(){pollForChange(" last-event-id ",'" events "');};"]))
 
 (defn page [subtitle & content]
   "Page template"
@@ -83,7 +90,7 @@
   "Overveiw of all teams and their ideas"
   (page
    "Teams"
-   (include-changepoll-js)
+   (include-changepoll-js :projector :teams)
    [:h1 "Teams & Topics"]
    [:p [:strong "Brainstorming time remaining: "
         [:span#countdown {:style "font-size:150%"} "10"]
@@ -166,12 +173,12 @@
 
 (defn page-projector-prestart []
   (page "Projector"
-        (include-changepoll-js)
+        (include-changepoll-js :projector)
         [:p {:style "text-align:center;font-size:200px;line-height:200px;margin:auto"} "?"]))
 
 (defn page-projector-task []
   (page "Projector"
-        (include-changepoll-js)
+        (include-changepoll-js :projector)
         [:h1 "The Gamification Challenge"]
         [:p "Gamification in praxis! Group with the people around and brainstorm a cool way to gamify a common task/problem. Describe briefly your idea to the other teams and vote for the best one."]
         [:p "Some ideas for what to increase via gamification: Trashbin usage in parks. E-book reading platform usage. Consumption of vegetables. Motivation to try/learn new stuff. (Listed also on the team registration page.)"]
@@ -179,7 +186,7 @@
 
 (defn page-projector-voting-ongoing []
   (page "Projector"
-        (include-changepoll-js)
+        (include-changepoll-js :projector :state)
         [:h1 "Voting in progress..."]
         ))
 
@@ -202,24 +209,41 @@
                            "Thank you for your vote!"
                            (page-vote @teams)))))
 
-(def state-changed-semafor "Synchronization object to wait on to be notified about important state changes" (Object.))
-
 (defn notify-change-listeners
   "Notify waiters that the value of the atom has changed"
-  [_ atom oldval newval]
-  (locking state-changed-semafor
-    (.notifyAll state-changed-semafor)))
+  [event _ _ _]
+  (swap! change-events conj event)
+  (doseq [notify @change-callbacks]
+    (if (notify @change-events)
+      (swap! change-callbacks disj notify))))
 
-(defn poll-handler [request]
-  (with-channel request channel
-    (locking state-changed-semafor
-      (try
-        (.wait state-changed-semafor))
-      (catch InterruptedException e (info (str "Interrupted while waiting for atom change: " e))))
-    (send! channel {:status 200
-                    :headers {"Content-Type" "application/json; charset=utf-8"}
-                    :body "{}"}
-           true)))
+(defn new-events-filtered
+  "Return events newer than the given last one and present in the filter list or an empty collection"
+  [events last-event-id filter]
+  (let [filter (set filter)]
+    (-> (drop last-event-id events)
+        set
+        (intersection filter))))
+
+(defn poll-handler [last-event-id event-names request]
+  ;; Callback return true if it has done its job and should be removed from the callback queue
+  (let [last-event-id (toint last-event-id)
+        desired-events (map keyword (clojure.string/split event-names (re-pattern ",")))]
+    (with-channel request channel
+     (swap!
+      change-callbacks
+      conj
+      (fn [change-events]
+        (let [new-events (new-events-filtered change-events last-event-id desired-events)]
+          (info (str "Notifying about new events;evts" new-events ",for lastId " last-event-id " and filter " (vec desired-events) "; all evts " change-events)) ;; TODO remove this log
+         ;; check if match any of the desired ones, send them if true
+          (if (seq new-events)
+            (do
+              (send! channel {:status 200
+                              :headers {"Content-Type" "application/json; charset=utf-8"}
+                              :body (clojure.data.json/write-str new-events)})
+                true)
+            false)))))))
 
 ;;; Having this fun to create routes to be able to pass system as an argument into them is wierd, seems to g
 ;;; against the logic of Compojure and is ugly because calling it again will change the var 'app-routes' def.
@@ -302,7 +326,7 @@
                   [:p "Do you really want to reset the state, teams, votes? "
                    [:a {:href "/reset?sure=yes"} "Sure, reset it all!"]])))
      (context "/poll" []
-              (GET "/state-change" [:as req] (poll-handler req)))
+              (GET "/state-change" [last-event-id event-names :as req] (poll-handler last-event-id event-names req)))
      (route/resources "/") ; TODO Cache-Control: max-age; see also  ring-etag-middleware
      (route/not-found "Not Found"))))
 
@@ -317,8 +341,8 @@
                              :voter-ips (atom #{})
                              :projector (atom :prestart)}
                             defaults)]
-               (add-watch (:projector result) :projector-display notify-change-listeners)
-               (add-watch (:teams result) :teams-display notify-change-listeners)
+               (add-watch (:projector result) :projector notify-change-listeners)
+               (add-watch (:teams result) :teams notify-change-listeners)
                result))
 
 (def current-system (atom nil))

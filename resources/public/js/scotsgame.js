@@ -1,10 +1,10 @@
-function pollForChange(){
+function pollForChange(lastId, events){
     var xhr = new XMLHttpRequest();
-    /*xhr.open('GET', '/poll/state-change', true);
+    xhr.open('GET', '/poll/state-change?last-event-id=' + lastId + '&event-names=' + events, true);
     xhr.onload = function() {
         document.location.reload();
     };
-    xhr.send();*/
+    xhr.send();
 }
 function countdown(targetId){
     var t=10;
