@@ -1,10 +1,10 @@
 function pollForChange(){
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/poll/state-change', true);
+    /*xhr.open('GET', '/poll/state-change', true);
     xhr.onload = function() {
         document.location.reload();
     };
-    xhr.send();
+    xhr.send();*/
 }
 function countdown(targetId){
     var t=10;
