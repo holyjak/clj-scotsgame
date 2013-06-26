@@ -7,5 +7,5 @@
             [clojure.pprint :refer (pprint)]
             [clojure.repl :refer :all]
             [clojure.test :as test]
-            [clojure.tools.namespace.repl :refer (refresh refresh-all)]
+            ;[clojure.tools.namespace.repl :refer (refresh refresh-all)]
             ))

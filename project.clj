@@ -8,7 +8,7 @@
                  [hiccup "1.0.3"]
                  [hiccup-bootstrap "0.1.2"]
                  [org.clojure/data.json "0.2.2"]]
-  ;:plugins [[lein-ring "0.8.5"]]
+  :plugins [[lein-ring "0.8.5"]]
   :ring {:handler clj-gamification.handler/app, :auto-refresh? true, :port 5000, :nrepl {:start? true, :port 4555}}
   :main clj-gamification.handler
   :profiles
