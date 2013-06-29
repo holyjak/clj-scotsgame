@@ -1,5 +1,8 @@
 (ns clj-gamification.handler
-  (:use compojure.core)
+  (:use compojure.core
+;;        ring.middleware.session.store ;; TODO delete
+        )
+;;  (:import java.util.UUID) ;; TODO rm
   (:require [compojure.handler :as handler]
             [compojure.route :as route]
             [hiccup.page :refer [html5 include-js]]
@@ -201,7 +204,7 @@
         gm? (:gamemaster? session)]
    (cond
     (or gm? first-visitor?) (do
-                              (info (str "GM access; first? " first-visitor? ", session " (-> req :cookies (get "ring-session") :value) ", ip " (:remote-addr req)))
+                              (info (str "GM access; first? " first-visitor? ", session id" (-> req :cookies (get "ring-session") :value) ", ip " (:remote-addr req) ", sess " session))
                               {:session {:gamemaster? true},
                               :body (page-gamemaster)})
     (= @state :brainstorming) (page-team-registration)
@@ -333,7 +336,7 @@
 (defn system
   "Returns a new instance of the whole application."
   [defaults] (let [result (merge
-                            {:session-atom (atom {})
+                            {:session-atom (atom {}),
                              :state (atom :not-started),
                              :team-counter (atom 1),
                              :teams (atom {}),
@@ -345,21 +348,6 @@
                (add-watch (:teams result) :teams notify-change-listeners)
                result))
 
-(def current-system (atom nil))
-
-(defn init
-  "Init the current system, optionally with a default system, returning a Ring handler"
-  ([] (init nil))
-  ([defaults]
-     (let [system (system defaults)]
-       (swap! current-system (constantly system))
-       (-> (handler/site (make-app-routes system))
-           (wrap-session {:store (memory-store (:session-atom system))})
-           (wrap-bootstrap-resources)
-           (wrap-file-info)))))
-
-(def app (init))
-
 (defn reset-state
   "Reset GM, teams, votes etc. to be able to start from scratch."
   [system]
@@ -369,7 +357,55 @@
   (reset! (:team-counter system) 1)
   (reset! (:teams system) {})
   (reset! (:votes system) {})
-  (reset! (:voter-ips system) #{}))
+  (reset! (:voter-ips system) #{})
+  (reset! (:projector system) :prestart))
+
+(def current-system-for-repl "Reference to the latest system created to have access to it from the REPL; don't use anywhere else" (atom nil))
+
+;; TODO It seems that reset of session doesn't work properly but the problem is likely somehwere else
+;; Sometimes nothing is written into the session atom, which is weird. This works, results in discovering
+;; non-exist. session and creating/writing a new one:
+;; (def sys (system {}))
+;; (def h (-> #(show-page-for-step sys %) (wrap-session {:store (MyMemoryStore. tmp-sess-atm)})))
+;; (h {:Iam "req", :headers {"cookie" "ring-session=my-dummy-sess-key;Path=/"}})
+;; =>
+;; Reading session my-dummy-sess-key from #<Atom@2c826d6: {}> => nil
+;; Written session  9dd1968f-e33a-4f4a-a058-8a5297ae7b0a -> {:gamemaster? true}  to  #<Atom@2c826d6: {9dd1968f-e33a-4f4a-a058-8a5297ae7b0a {:gamemaster? true}}>
+;; TBD Verify with a browser with existing cookie that the value gets updated;
+;; Then, why is the tmp-sess-atom always empty??
+;; !!!! ANONYM. WINS IN CHROME SHARE COOKIES -> set in one, E in all - so it seems
+;;(def tmp-sess-atm (atom {}))
+;; FIXME: Open anon. FF -> become GM; reload in Chrome that was GM before reset (and has cookie) => GM too
+
+(comment deftype MyMemoryStore [session-map] ;; was here for testing/experiments only
+  SessionStore
+  (read-session [_ key]
+     (println "Reading session" key "from" session-map "=>" (@session-map key))
+    (@session-map key))
+  (write-session [_ key data]
+    (let [key (or key (str (UUID/randomUUID)))]
+      (swap! session-map assoc key data)
+      (println "Written session " key "->" data " to " session-map)
+      key))
+  (delete-session [_ key]
+    (swap! session-map dissoc key)
+    nil))
+
+(defn init
+  "Init the current system, optionally with a default system, returning a Ring handler"
+  ([] (init nil))
+  ([defaults]
+     (let [system (system defaults)]
+       (swap! current-system-for-repl (constantly system))
+       (-> (handler/site (make-app-routes system))
+           (wrap-session {:store
+                          ;; (MyMemoryStore. tmp-sess-atm) ; TODO remove - fro troubleshooting only
+                          (memory-store (:session-atom system))})
+           (wrap-bootstrap-resources)
+           (wrap-file-info)))))
+
+(def app (init))
+
 ;; TIME USED: (time-in-hrs + 3.5 1.5 1 + 1) + (5h lørdag, 1t søndag)
 ;; incl.: learning and setting up heroku (1h), learning/troubleshooting (2+h)
 
@@ -383,4 +419,6 @@
 
 (comment ;; for use in REPL
   (-main "5000")
+  @current-system-for-repl
+  @tmp-sess-atm
   )
