@@ -310,12 +310,12 @@
      (context "/command" [] ; GameMaster posts commands here
               (POST "/show-task" [] (str (compare-and-set! projector :prestart :task)))
               (POST "/start-brainstorming" [] (str (compare-and-set! projector :task :teams)))
-              (POST "/start-voting" [] (str (and
-                                             (compare-and-set! state :brainstorming :voting)
-                                             (swap! projector (constantly :voting)))))
-              (POST "/show-voting-results" [] (str (and
-                                                    (compare-and-set! state :voting :voting-finished)
-                                                    (swap! projector (constantly :results))))))
+              (POST "/start-voting" [] (str (boolean (and
+                                                      (compare-and-set! state :brainstorming :voting)
+                                                      (swap! projector (constantly :voting))))))
+              (POST "/show-voting-results" [] (str (boolean (and
+                                                             (compare-and-set! state :voting :voting-finished)
+                                                             (swap! projector (constantly :results)))))))
      (GET "/reset" [sure]
           (if sure
             (do
