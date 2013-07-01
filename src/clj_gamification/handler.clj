@@ -161,6 +161,7 @@
 
 (defn page-await-vote [referer]
   (page "Awaiting voting..."
+        (include-changepoll-js :state)
         [:p "Do "
          [:a {:href "/"} "vote for the best idea"]
          " once voting is opened"]
@@ -233,7 +234,7 @@
       conj
       (fn [change-events]
         (let [new-events (new-events-filtered change-events last-event-id desired-events)]
-          (info (str "Notifying about new events;evts" new-events ",for lastId " last-event-id " and filter " (vec desired-events) "; all evts " change-events)) ;; TODO remove this log
+          (info (str "Notifying about new events;evts" new-events ",for lastId " last-event-id " and filter " (vec desired-events) "; las 10 evts " (take-last 10 change-events))) ;; TODO remove this log
          ;; check if match any of the desired ones, send them if true
           (if (seq new-events)
             (do
@@ -294,8 +295,8 @@
                 :status 201
                 :body (page "Voted" [:p "Thank you for voting for team " teamid "!"])})))
      (GET "/await-vote" [:as req]
-          (if (= :voting state)
-            (redirect "/vote")
+          (if (= :voting @state)
+            (redirect "/")
             (page-await-vote (get-in req [:headers "referer"]))))
      (GET "/vote" [] "Sorry, you can only POST to this page")
      (GET "/vote-results" [] (page-vote-results @teams @votes))
@@ -339,8 +340,8 @@
                              :voter-ips (atom #{})
                              :projector (atom :prestart)}
                             defaults)]
-               (add-watch (:projector result) :projector notify-change-listeners)
-               (add-watch (:teams result) :teams notify-change-listeners)
+               (doseq [[key atom] result :when (not (#{:session-atom :team-counter} key))]
+                 (add-watch atom key notify-change-listeners))
                result))
 
 (defn reset-state
@@ -356,7 +357,7 @@
   (reset! (:projector system) :prestart)
   (reset! (:session-atom system) {}))
 
-(def current-system-for-repl "Reference to the latest system created to have access to it from the REPL; don't use anywhere else" (atom nil))
+(defonce ^{:doc "Reference to the latest system created to have access to it from the REPL; don't use anywhere else"} current-system-for-repl (atom nil))
 
 (defn init
   "Init the current system, optionally with a default system, returning a Ring handler"
@@ -374,7 +375,7 @@
 ;; TIME USED: (time-in-hrs + 3.5 1.5 1 + 1) + (5h lørdag, 1t søndag)
 ;; incl.: learning and setting up heroku (1h), learning/troubleshooting (2+h)
 
-(def ^{:static true} server-stop-fn (atom nil))
+(defonce ^{:static true} server-stop-fn (atom nil))
 
 (defn -main [port] ;; entry point
   (let [port (Integer/parseInt port)
@@ -385,5 +386,4 @@
 (comment ;; for use in REPL
   (-main "5000")
   @current-system-for-repl
-  @tmp-sess-atm
   )
