@@ -183,10 +183,11 @@
         [:p "Some ideas for what to increase via gamification: Trashbin usage in parks. E-book reading platform usage. Consumption of vegetables. Motivation to try/learn new stuff. (Listed also on the team registration page.)"]
         [:p "Be quick: The 1st and 3rd registered teams get a nice surprise!"]))
 
-(defn page-projector-voting-ongoing []
+(defn page-projector-voting-ongoing [votes]
   (page "Projector"
-        (include-changepoll-js :projector :state)
+        (include-changepoll-js :projector :state :votes)
         [:h1 "Voting in progress..."]
+        [:p "Voters so far: " (apply + (vals votes))]
         ))
 
 (defn has-voted? [{:keys [remote-addr session]}]
@@ -305,7 +306,7 @@
             :prestart (page-projector-prestart)
             :task (page-projector-task)
             :teams (page-teams @teams)
-            :voting (page-projector-voting-ongoing)
+            :voting (page-projector-voting-ongoing @votes)
             :results (page-vote-results @teams @votes)))
      (context "/command" [] ; GameMaster posts commands here
               (POST "/show-task" [] (str (compare-and-set! projector :prestart :task)))
