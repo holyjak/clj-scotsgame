@@ -46,14 +46,20 @@
     [:a {:href "/await-vote"} "await voting for the best idea"]
     " to be started"])
 
+(def gamification-ideas ["Increase trashbin usage in parks." "Increase e-book reading platform usage." "Increase consumption of vegetables." "Increase motivation to try/learn new stuff."])
+
 (defn page-team-registration []
   "Team self-registration"
   (page
    "Team registration"
-   [:h1 "Ready for an awesome discussion about gamification?"]
-   [:form#newGroupForm {:action "/team"}
-    [:button.btn {:type "sumbit"} "Start a new team!"]]
-   await-voting-html))
+      [:h1 "Ready for an awesome discussion about gamification?"]
+      [:p "Get togehther with the people around you and come up with the best gamification idea!"]
+      [:p "Some ideas to spark your imagination:"]
+      [:ul
+          (map (fn [idea] [:li idea]) gamification-ideas)]
+      [:form#newGroupForm {:action "/team"}
+          [:button.btn {:type "sumbit"} "Start a new team!"]]
+      await-voting-html))
 
 (defn page-team-idea [team-id idea published]
   "Form to submit name of team's gamification idea"
@@ -64,7 +70,7 @@
    [:form {:action (str "/team/" team-id "/idea"), :method "post"}
     [:h1 (str "Publish team " team-id "'s gamification idea:")]
     [:br]
-    (let [ideas ["Increase trashbin usage in parks." "Increase e-book reading platform usage." "Increase consumption of vegetables." "Increase motivation to try/learn new stuff."]]
+    (let [ideas gamification-ideas]
       [:ul.unstyled
        (map (fn [id] [:li [:label.radio
                           [:input {:type "radio", :name "idea", :value id}]
@@ -80,7 +86,7 @@
                    :placeholder "Your own idea",
                    :title "Describe your idea"
                    :onchange "document.getElementById('custIdeaIn').value=this.value;"}]]]]])
-    [:button.btn {:type "submit"} "Publish"]]
+    [:button.btn {:type "submit"} "(Re-)Publish"]]
    await-voting-html
    ))
 
@@ -129,7 +135,10 @@
      [:ol
       (map
        (fn [[id votes]] [:li votes " votes for team " id " with " (get teams id)]) ; TODO show picture, format the list nicely
-       results)])))
+          results)]))
+    [:p "The winning team and the first team registered (#"
+        (first (first (sort-by first teams)))
+        "): please come to the stage!"])
 
 (defn- command-js [command] ; TODO include in a script element as a js fun, call it
   "Create JavaScript to perform a GM command in the background"
@@ -144,31 +153,25 @@
   []
   (page
    "GameMaster Control"
-   [:h1 "You control the game!"]
-   [:p "Your mission, should you decide to accept it: Challenge the participants to group and brainstorm in 10 min interesting gamification ideas, present them, and then vote for the best one."]
-   [:p "Use the buttons below in order to move between the phases, changing what's shown on the projector."] ; TODO Hide when read?
-   [:h2 "Controls"]
+      [:h1 "You control the game!"]
+      [:p "As you were the first to come here, you have the unique role of controlling the game! Please go to the stage and present yourself. Thank you!"]
+      [:p "Your mission, should you decide to accept it: Challenge the participants to group and brainstorm in 10 min interesting gamification ideas, present them, and then vote for the best one."]
+      [:p "Use the 4 buttons below in order to move between the phases, changing what's shown on the projector and on other participants' screens."] ; TODO Hide when read?
+      [:h2 "Controls"]
    (letfn [(button [cmd label]
              [:button.btn.btn-large
               {:style "display:block;width:100%;margin-bottom:10px",
                :onclick (command-js cmd)}
               label])]
-    [:div#gmControls
-     (button "show-task" "1. Show the task on the projector")
-     (button "start-brainstorming" "2. Start brainstorming")
-     (button "start-voting" "3. Start voting")
-     (button "show-voting-results" "4. Show voting results")])))
-
-(defn page-await-vote [referer]
-  (page "Awaiting voting..."
-        (include-changepoll-js :state)
-        [:p "Do "
-         [:a {:href "/"} "vote for the best idea"]
-         " once voting is opened"]
-        (when referer
-          [:p "(Or "
-           [:a {:href referer} "go back"]
-           " where you came from.)"])))
+       [:div#gmControls                 ; TODO add css to make :p italic
+           [:p "Ready? Let other's know what to do by pressing button 1!"]
+           (button "show-task" "1. Show the task on the projector")
+           [:p "Everybody has read the task? Then allow them to register teams by pressing #2!"]
+           (button "start-brainstorming" "2. Start brainstorming")
+           [:p "Give them 10 min to form teams and brainstorm (see the projector), then let them vote for the best idea by pressing #3!"]
+           (button "start-voting" "3. Start voting")
+           [:p "After few minuts (watch the projector), show results of the voting!"]
+           (button "show-voting-results" "4. Show voting results")])))
 
 (defn page-projector-prestart []
   (page "Projector"
@@ -181,7 +184,21 @@
         [:h1 "The Gamification Challenge"]
         [:p "Gamification in praxis! Group with the people around and brainstorm a cool way to gamify a common task/problem. Describe briefly your idea to the other teams and vote for the best one."]
         [:p "Some ideas for what to increase via gamification: Trashbin usage in parks. E-book reading platform usage. Consumption of vegetables. Motivation to try/learn new stuff. (Listed also on the team registration page.)"]
-        [:p "Be quick: The 1st and 3rd registered teams get a nice surprise!"]))
+      [:p "Be quick: The 1st registered team gets a nice surprise!"]
+      [:p "Be inventive: The best idea gets a nice surprise too!"]))
+
+;;; Registered teams overview - see page-teams
+
+(defn page-await-vote [referer]
+  (page "Awaiting voting..."
+        (include-changepoll-js :state)
+        [:p "Do "
+         [:a {:href "/"} "vote for the best idea"]
+         " once voting is opened"]
+        (when referer
+          [:p "(Or "
+           [:a {:href referer} "go back"]
+           " where you came from.)"])))
 
 (defn page-projector-voting-ongoing [votes]
   (page "Projector"
