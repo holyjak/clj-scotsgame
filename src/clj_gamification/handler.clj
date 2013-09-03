@@ -28,8 +28,7 @@
         events (clojure.string/join "," (map name event-keys))]
     [:script {:type "text/javascript"} "window.onload=function(){pollForChange(" last-event-id ",'" events "');};"]))
 
-(defn page [subtitle & content]
-  "Page template"
+(defn page-configurable "Page template" [subtitle footer? content]
   (html5
    [:head
     [:title subtitle " :: ScotsGame"]
@@ -39,7 +38,14 @@
     [:style {:type "text/css"} "h1 {font-size:180%} h2 {font-size:160%}"]]
    [:body (fixed-layout
            content
-           [:p {:style "font-size:xx-small;border-top:1px solid grey;margin-top:3em;text-align:right;"} "Powered by Clojure"])]))
+              (when footer?
+                  [:p {:style "font-size:xx-small;border-top:1px solid grey;margin-top:3em;text-align:right;"} "Powered by Clojure"]))]))
+
+(defn page-plain [subtitle & content]
+    (page-configurable subtitle false content))
+
+(defn page [subtitle & content]
+    (page-configurable subtitle true content))
 
 (def await-voting-html
   [:p "Or "
@@ -170,7 +176,7 @@
            (button "show-voting-results" "4. Show voting results")])))
 
 (defn page-projector-prestart []
-  (page "Projector"
+  (page-plain "Projector"
         (include-changepoll-js :projector)
         [:p {:style "text-align:center;font-size:200px;line-height:200px;margin:auto"} "?"]))
 
