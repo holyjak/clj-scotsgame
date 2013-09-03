@@ -48,47 +48,41 @@
 
 (def gamification-ideas ["Increase trashbin usage in parks." "Increase e-book reading platform usage." "Increase consumption of vegetables." "Increase motivation to try/learn new stuff."])
 
-(defn page-team-registration []
-  "Team self-registration"
+(defn page-team-await-brainstorming "Participants wait until brainstorming started" []
   (page
-   "Team registration"
-      [:h1 "Ready for an awesome discussion about gamification?"]
-      [:p "Get togehther with the people around you and come up with the best gamification idea!"]
-      [:p "Some ideas to spark your imagination:"]
-      [:ul
-          (map (fn [idea] [:li idea]) gamification-ideas)]
-      [:form#newGroupForm {:action "/team"}
-          [:button.btn {:type "sumbit"} "Start a new team!"]]
-      await-voting-html))
+   "Awaiting brainstorming"
+      (include-changepoll-js :state)
+      [:h1 "Waiting for brainstorming to start..."]))
 
-(defn page-team-idea [team-id idea published]
-  "Form to submit name of team's gamification idea"
-  (page
-   "Idea"
-   (when published
-     [:p.text-success "Your idea has been published"])
-   [:form {:action (str "/team/" team-id "/idea"), :method "post"}
-    [:h1 (str "Publish team " team-id "'s gamification idea:")]
-    [:br]
-    (let [ideas gamification-ideas]
-      [:ul.unstyled
-       (map (fn [id] [:li [:label.radio
-                          [:input {:type "radio", :name "idea", :value id}]
-                          " "
-                          id]
-                     [:br]])
-            ideas)
-       [:li
-        [:label.radio
-         [:input#custIdeaIn {:type "radio", :name "idea"}
-          [:input {:type "text", :value idea,
-                   :autofocus "true",
-                   :placeholder "Your own idea",
-                   :title "Describe your idea"
-                   :onchange "document.getElementById('custIdeaIn').value=this.value;"}]]]]])
-    [:button.btn {:type "submit"} "(Re-)Publish"]]
-   await-voting-html
-   ))
+(defn page-team-idea "Form to submit name of team's gamification idea"
+    ([] (page-team-idea nil nil false))
+    ([team-id idea published]
+        (page
+            "Idea"
+            (when published
+                [:p.text-success "Idea of team #" team-id " has been published"])
+            [:form {:action (str "/team" (if team-id (str "/" team-id) "") "/idea"), :method "post"}
+                [:h1 (str "Team/idea publication:")]
+                [:p "Get togehther with people around you and come up with the best gamification idea!"]
+                [:br]
+                [:ul.unstyled
+                    (map (fn [id] [:li [:label.radio
+                                          [:input {:type "radio", :name "idea", :value id}]
+                                          " "
+                                          id]
+                                     [:br]])
+                        gamification-ideas)
+                    [:li
+                        [:label.radio
+                            [:input#custIdeaIn {:type "radio", :name "idea"}
+                                [:input {:type "text", :value idea,
+                                            :autofocus "true",
+                                            :placeholder "Your own idea",
+                                            :title "Describe your idea"
+                                            :onchange "document.getElementById('custIdeaIn').value=this.value;"}]]]]]
+                [:button.btn {:type "submit"} "(Re-)Publish"]]
+            await-voting-html
+            )))
 
 (defn page-teams [teams]
   "Overveiw of all teams and their ideas"
@@ -129,16 +123,18 @@
 
 (defn page-vote-results [teams votes]
   (page
-   "Results"
-   [:h1 "Voting results:"]
-   (let [results (reverse (sort-by second votes))]
-     [:ol
-      (map
-       (fn [[id votes]] [:li votes " votes for team " id " with " (get teams id)]) ; TODO show picture, format the list nicely
-          results)]))
-    [:p "The winning team and the first team registered (#"
-        (first (first (sort-by first teams)))
-        "): please come to the stage!"])
+      "Results"
+      [:h1 "Voting results:"]
+      (let [results (reverse (sort-by second votes))
+               first-team (first (sort (keys teams)))]
+          [:div
+              [:ol
+                  (map
+                      (fn [[id votes]] [:li votes " votes for team " id " with " (get teams id)]) ; TODO show picture, format the list nicely
+                      results)]
+              [:p "The winning team and the first team registered (#"
+                  first-team
+                  "): please come to the stage!"]])))
 
 (defn- command-js [command] ; TODO include in a script element as a js fun, call it
   "Create JavaScript to perform a GM command in the background"
@@ -190,11 +186,12 @@
 ;;; Registered teams overview - see page-teams
 
 (defn page-await-vote [referer]
-  (page "Awaiting voting..."
+    (page "Awaiting voting..."
         (include-changepoll-js :state)
         [:p "Do "
          [:a {:href "/"} "vote for the best idea"]
-         " once voting is opened"]
+            " once voting is opened"]
+        "(You will be redirected there automatically.)"
         (when referer
           [:p "(Or "
            [:a {:href referer} "go back"]
@@ -211,20 +208,22 @@
   (or
    (:voted? session)))
 
-(defn show-page-for-step [{:keys [teams state] :as system}
-                          {:keys [remote-addr session] :as req}]
-  "Show the right page for the current stage: gamemaster, team registr., voting"
-  (let [first-visitor? (compare-and-set! state :not-started :brainstorming)
-        gm? (:gamemaster? session)]
-   (cond
-    (or gm? first-visitor?) (do
-                              (info (str "GM access; first? " first-visitor? ", session id" (-> req :cookies (get "ring-session") :value) ", ip " (:remote-addr req) ", sess " session ", sess.store: " @(:session-atom system)))
-                              {:session {:gamemaster? true},
-                              :body (page-gamemaster)})
-    (= @state :brainstorming) (page-team-registration)
-    (= @state :voting) (if (has-voted? req)
-                           "Thank you for your vote!"
-                           (page-vote @teams)))))
+(defn show-page-for-step
+    "Show the right page for the current stage: gamemaster, team registr., voting"
+    [{:keys [teams state] :as system}
+        {:keys [remote-addr session] :as req}]
+    (let [first-visitor? (compare-and-set! state :not-started :task-intro)
+             gm? (:gamemaster? session)]
+        (cond
+            (or gm? first-visitor?) (do
+                                        (info (str "GM access; first? " first-visitor? ", session id" (-> req :cookies (get "ring-session") :value) ", ip " (:remote-addr req) ", sess " session ", sess.store: " @(:session-atom system)))
+                                        {:session {:gamemaster? true},
+                                            :body (page-gamemaster)})
+            (= @state :task-intro) (page-team-await-brainstorming)
+            (= @state :brainstorming) (page-team-idea)
+            (= @state :voting) (if (has-voted? req)
+                                   "Thank you for your vote!"
+                                   (page-vote @teams)))))
 
 (defn notify-change-listeners
   "Notify waiters that the value of the atom has changed"
@@ -286,18 +285,20 @@
   "
      (GET "/" [:as req]
           (show-page-for-step system req))
-     (context "/team" []
-              (GET "/" [] (redirect (let [id (swap! team-counter inc)] ; TODO assign picture/name of an animal
-                                      (swap! teams assoc id "")
-                                      (str "/team/" id))))
+          (context "/team" []
+              (GET "/" [] (page-team-idea))
               (GET "/:id" [id published]
-                   (let [id (toint id)
-                         idea (get @teams id)]
-                     (page-team-idea id idea published)))
-              (POST "/:id/idea" [id idea]
+                  (let [id (toint id)
+                           idea (get @teams id)]
+                      (page-team-idea id idea published)))
+              (POST "/idea" [idea]      ; post new idea
+                  (let [id (swap! team-counter inc)] ; TODO assign picture/name of an animal
+                      (swap! teams assoc id idea)
+                      (redirect (str "/team/" id "?published=true"))))
+              (POST "/:id/idea" [id idea] ; update an idea
                     (let [id (toint id)]
                       (info (str "idea posted: " idea))
-                      (swap! teams assoc id idea) ; TODO notify visibly that the idea has been published; notify /teams page
+                      (swap! teams assoc id idea)
                       (redirect (str "/team/" id "?published=true")))))
      (GET "/teams" []
           (page-teams @teams))
@@ -308,7 +309,7 @@
              (do
                (swap! votes (partial merge-with + {(toint teamid) 1}))
                ;; two re-voting preventions:
-               (swap! voter-ips conj (:remote-addr req))
+               (swap! voter-ips conj (:remote-addr req))  ; remove, unused?
                {:session {:voted? true},
                 :status 201
                 :body (page "Voted" [:p "Thank you for voting for team " teamid "!"])})))
@@ -327,7 +328,9 @@
             :results (page-vote-results @teams @votes)))
      (context "/command" [] ; GameMaster posts commands here
               (POST "/show-task" [] (str (compare-and-set! projector :prestart :task)))
-              (POST "/start-brainstorming" [] (str (compare-and-set! projector :task :teams)))
+         (POST "/start-brainstorming" [] (str (boolean (and
+                                                           (compare-and-set! state :task-intro :brainstorming)
+                                                           (compare-and-set! projector :task :teams)))))
               (POST "/start-voting" [] (str (boolean (and
                                                       (compare-and-set! state :brainstorming :voting)
                                                       (swap! projector (constantly :voting))))))

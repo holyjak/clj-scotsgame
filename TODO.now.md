@@ -1,6 +1,9 @@
 TODO Now
 ========
 
-* Show waiting screen for other participants until Brainstorming started
-* ? css
-* Merge team pre-registr. page and the registration page itself (+ add 'wait until brainst.started')
+Must have:
+
+Nice to have:
+
+* projector: do not show Powered by Clojure
+* ? css -> italics for button labels (GM)
