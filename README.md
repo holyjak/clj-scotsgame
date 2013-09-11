@@ -15,7 +15,7 @@ To start a web server for the application, run:
 
     lein run 5000
 
-To run it in development mode, without support for long-polling, use ring:
+To run it in development mode, without support for long-polling but with live reloading, use ring:
 
     lein ring server
 
