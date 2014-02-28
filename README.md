@@ -2,6 +2,16 @@
 
 Scotsgame: A little game for a workshop on Gamification.
 
+## About
+
+An interactive webapp/game for mobile devices. The first one who access the webapp becomes "gamemaster" and controls transitions between stages of the game and thus what is shown on a projector (showing content of `/projector`) and what other participants can see. The main stages of the "game" are:
+
+1. Team registration - create and register a team and its gamification idea
+2. Voting - vote for the team/idea you like most
+3. Show results of voting
+
+It uses websockets/long-polling to update the projector when the stage changes.
+
 ## Prerequisites
 
 You will need [Leiningen][1] 2 or above and [Heroku toolbelt][2] installed.
